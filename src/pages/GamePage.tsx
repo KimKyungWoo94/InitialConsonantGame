@@ -12,6 +12,7 @@ import { useAnswersSubscription, useRoomSubscription } from '../hooks/useGameSub
 import type { Answer, GameSession, PlayerRole, Room } from '../types';
 import { formatChosung } from '../utils/chosung';
 import { loadSession, saveSession } from '../utils/session';
+import { shareRoomInvite } from '../utils/share';
 
 export function GamePage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -23,6 +24,7 @@ export function GamePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [shareMessage, setShareMessage] = useState('');
   const historyRef = useRef<HTMLDivElement>(null);
 
   const player: PlayerRole | null = session?.player ?? null;
@@ -136,16 +138,11 @@ export function GamePage() {
 
   const shareInvite = async () => {
     if (!room) return;
-    const url = window.location.origin;
-    const text = `초성 게임에 초대합니다! 방 코드: ${room.code}\n${url}`;
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: '초성 게임', text, url });
-      } catch { /* cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(text);
-      alert('방 코드가 복사되었습니다!');
+    const result = await shareRoomInvite(room.code);
+    if (result.message) {
+      setShareMessage(result.message);
+      setTimeout(() => setShareMessage(''), 3000);
     }
   };
 
@@ -218,12 +215,20 @@ export function GamePage() {
           <p className="text-violet-200">상대방 입장 대기 중...</p>
           <p className="mt-6 text-5xl font-bold tracking-[0.3em] text-white">{room.code}</p>
           <p className="mt-2 text-sm text-violet-300">방 코드를 공유하세요</p>
+          {shareMessage && (
+            <p className="mt-4 rounded-xl bg-green-500/20 px-3 py-2 text-sm text-green-200">
+              {shareMessage}
+            </p>
+          )}
           <button
             onClick={shareInvite}
-            className="mt-6 w-full rounded-2xl bg-violet-500 py-4 font-semibold text-white"
+            className="mt-6 w-full rounded-2xl bg-violet-500 py-4 font-semibold text-white active:scale-[0.98]"
           >
             코드 공유하기
           </button>
+          <p className="mt-3 text-xs text-violet-400">
+            공유가 안 되면 카카오톡에 방 코드({room.code})를 직접 보내주세요
+          </p>
           <button
             onClick={() => navigate('/')}
             className="mt-3 w-full py-2 text-sm text-violet-300"
