@@ -6,16 +6,20 @@ function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-export async function createRoom(playerName: string, playerId: string): Promise<Room> {
+export async function createRoom(
+  playerName: string,
+  playerId: string,
+  chosung?: string
+): Promise<Room> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateRoomCode();
-    const chosung = randomChosung(2);
+    const roomChosung = chosung ?? randomChosung(2);
 
     const { data, error } = await supabase
       .from('rooms')
       .insert({
         code,
-        chosung,
+        chosung: roomChosung,
         player_a: playerName,
         player_a_id: playerId,
         status: 'waiting',
@@ -88,23 +92,13 @@ export async function submitWord(
   player: PlayerRole,
   word: string,
   chosung: string,
-  usedWords: string[]
+  _usedWords: string[]
 ): Promise<SubmitWordResult> {
   const normalized = normalizeWord(word);
   const validation = validateChosung(normalized, chosung);
 
   if (!validation.ok) {
     return { success: false, reason: validation.reason };
-  }
-
-  if (usedWords.some((w) => normalizeWord(w) === normalized)) {
-    await endGame(roomId, player);
-    return {
-      success: false,
-      reason: '이미 나온 단어예요!',
-      gameOver: true,
-      loser: player,
-    };
   }
 
   const { data, error } = await supabase.rpc('submit_word', {
@@ -127,13 +121,30 @@ export async function surrender(roomId: string, player: PlayerRole) {
   return data;
 }
 
-export async function rematch(roomId: string) {
-  const { data, error } = await supabase.rpc('rematch_game', {
-    p_room_id: roomId,
-  });
+export async function rematch(roomId: string, chosung?: string) {
+  const room = await fetchRoom(roomId);
+  const length = (room?.chosung.length === 3 ? 3 : 2) as 2 | 3;
+  const finalChosung = chosung ?? randomChosung(length);
 
-  if (error) throw error;
-  return data;
+  const { error: deleteError } = await supabase
+    .from('answers')
+    .delete()
+    .eq('room_id', roomId);
+
+  if (deleteError) throw deleteError;
+
+  const { error: updateError } = await supabase
+    .from('rooms')
+    .update({
+      status: 'playing',
+      winner: null,
+      turn: 'A',
+      chosung: finalChosung,
+    })
+    .eq('id', roomId);
+
+  if (updateError) throw updateError;
+  return { success: true };
 }
 
 export async function endGame(roomId: string, loser: PlayerRole) {

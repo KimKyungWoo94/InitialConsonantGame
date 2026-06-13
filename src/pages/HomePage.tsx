@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
 import { createRoom, joinRoom } from '../hooks/useRoom';
 import { getPlayerId, saveSession } from '../utils/session';
 import { InstallPrompt } from '../components/InstallPrompt';
+import { formatChosung, type ChosungLength } from '../utils/chosung';
+
+type ChosungMode = 'random' | 'custom';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -11,6 +15,9 @@ export function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [chosungMode, setChosungMode] = useState<ChosungMode>('random');
+  const [customChosung, setCustomChosung] = useState('');
+  const [chosungLength, setChosungLength] = useState<ChosungLength>(2);
 
   const handleCreate = async () => {
     if (!playerName.trim()) {
@@ -18,12 +25,22 @@ export function HomePage() {
       return;
     }
 
+    let chosung: string | undefined;
+    if (chosungMode === 'custom') {
+      const validation = validateCustomChosung(customChosung, chosungLength);
+      if (!validation.ok) {
+        setError(validation.reason);
+        return;
+      }
+      chosung = validation.value;
+    }
+
     setLoading(true);
     setError('');
 
     try {
       const playerId = getPlayerId();
-      const room = await createRoom(playerName.trim(), playerId);
+      const room = await createRoom(playerName.trim(), playerId, chosung);
       saveSession({
         roomId: room.id,
         player: 'A',
@@ -109,6 +126,45 @@ export function HomePage() {
               />
             </div>
 
+            {mode === 'create' && (
+              <div className="space-y-3">
+                <label className="block text-sm text-violet-200">초성 설정</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChosungMode('random')}
+                    className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                      chosungMode === 'random'
+                        ? 'bg-violet-500 text-white'
+                        : 'bg-white/10 text-violet-200'
+                    }`}
+                  >
+                    랜덤
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChosungMode('custom')}
+                    className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                      chosungMode === 'custom'
+                        ? 'bg-violet-500 text-white'
+                        : 'bg-white/10 text-violet-200'
+                    }`}
+                  >
+                    직접 입력
+                  </button>
+                </div>
+
+                {chosungMode === 'custom' && (
+                  <ChosungPicker
+                    value={customChosung}
+                    length={chosungLength}
+                    onChange={setCustomChosung}
+                    onLengthChange={setChosungLength}
+                  />
+                )}
+              </div>
+            )}
+
             {mode === 'join' && (
               <div>
                 <label className="mb-1 block text-sm text-violet-200">방 코드</label>
@@ -147,7 +203,7 @@ export function HomePage() {
         <div className="mt-8 rounded-2xl bg-white/5 p-4 text-sm text-violet-200">
           <p className="font-medium text-white">게임 방법</p>
           <ul className="mt-2 list-disc space-y-1 pl-4">
-            <li>랜덤 초성이 주어집니다 (예: ㅅㄹ)</li>
+            <li>랜덤 또는 직접 입력 초성 (예: {formatChosung('ㅅㄹ')})</li>
             <li>같은 초성 단어를 번갈아 입력</li>
             <li>중복 단어 or 포기하면 패배!</li>
           </ul>

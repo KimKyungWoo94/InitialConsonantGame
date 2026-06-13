@@ -10,9 +10,10 @@ import {
 } from '../hooks/useRoom';
 import { useAnswersSubscription, useRoomSubscription } from '../hooks/useGameSubscription';
 import type { Answer, GameSession, PlayerRole, Room } from '../types';
-import { formatChosung } from '../utils/chosung';
+import { formatChosung, type ChosungLength } from '../utils/chosung';
 import { loadSession, saveSession } from '../utils/session';
 import { shareRoomInvite } from '../utils/share';
+import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
 
 export function GamePage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -25,6 +26,10 @@ export function GamePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [shareMessage, setShareMessage] = useState('');
+  const [rematchMode, setRematchMode] = useState<'random' | 'custom'>('random');
+  const [rematchChosung, setRematchChosung] = useState('');
+  const [rematchLength, setRematchLength] = useState<ChosungLength>(2);
+  const [rematching, setRematching] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
   const player: PlayerRole | null = session?.player ?? null;
@@ -124,15 +129,31 @@ export function GamePage() {
     }
   };
 
-  const handleRematch = async () => {
-    if (!room) return;
+  const handleRematch = async (chosung?: string) => {
+    if (!room || rematching) return;
+
+    if (rematchMode === 'custom' && !chosung) {
+      const validation = validateCustomChosung(rematchChosung, rematchLength);
+      if (!validation.ok) {
+        setError(validation.reason);
+        return;
+      }
+      chosung = validation.value;
+    }
+
+    setRematching(true);
+    setError('');
+
     try {
-      await rematch(room.id);
+      await rematch(room.id, chosung);
       setAnswers([]);
-      setError('');
       setWord('');
+      setRematchChosung('');
+      setRematchMode('random');
     } catch (e) {
       setError(e instanceof Error ? e.message : '다시 하기에 실패했습니다.');
+    } finally {
+      setRematching(false);
     }
   };
 
@@ -189,12 +210,52 @@ export function GamePage() {
           <p className="mt-4 text-3xl font-bold tracking-widest text-violet-300">
             {formatChosung(room.chosung)}
           </p>
+
+          {error && (
+            <p className="mt-4 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-200">{error}</p>
+          )}
+
           <div className="mt-6 space-y-3">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRematchMode('random')}
+                className={`flex-1 rounded-xl py-2 text-sm ${
+                  rematchMode === 'random' ? 'bg-violet-500 text-white' : 'bg-white/10 text-violet-200'
+                }`}
+              >
+                랜덤
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRematchMode('custom');
+                  setRematchLength(room.chosung.length as ChosungLength);
+                }}
+                className={`flex-1 rounded-xl py-2 text-sm ${
+                  rematchMode === 'custom' ? 'bg-violet-500 text-white' : 'bg-white/10 text-violet-200'
+                }`}
+              >
+                초성 직접 입력
+              </button>
+            </div>
+
+            {rematchMode === 'custom' && (
+              <ChosungPicker
+                value={rematchChosung}
+                length={rematchLength}
+                onChange={setRematchChosung}
+                onLengthChange={setRematchLength}
+                disabled={rematching}
+              />
+            )}
+
             <button
-              onClick={handleRematch}
-              className="w-full rounded-2xl bg-violet-500 py-4 font-semibold text-white"
+              onClick={() => handleRematch()}
+              disabled={rematching}
+              className="w-full rounded-2xl bg-violet-500 py-4 font-semibold text-white disabled:opacity-50"
             >
-              다시 하기
+              {rematching ? '시작 중...' : rematchMode === 'random' ? '랜덤 다시 하기' : '이 초성으로 다시 하기'}
             </button>
             <button
               onClick={() => navigate('/')}
@@ -214,6 +275,9 @@ export function GamePage() {
         <div className="w-full max-w-md rounded-3xl bg-white/10 p-8 text-center backdrop-blur">
           <p className="text-violet-200">상대방 입장 대기 중...</p>
           <p className="mt-6 text-5xl font-bold tracking-[0.3em] text-white">{room.code}</p>
+          <p className="mt-4 text-2xl font-bold tracking-widest text-violet-300">
+            {formatChosung(room.chosung)}
+          </p>
           <p className="mt-2 text-sm text-violet-300">방 코드를 공유하세요</p>
           {shareMessage && (
             <p className="mt-4 rounded-xl bg-green-500/20 px-3 py-2 text-sm text-green-200">

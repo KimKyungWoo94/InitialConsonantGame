@@ -82,11 +82,47 @@ async function testGameFlow() {
 
   await supabase.from('rooms').delete().eq('id', room.id);
 
+  // 커스텀 초성 테스트
+  const code2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const { data: customRoom, error: customCreateError } = await supabase
+    .from('rooms')
+    .insert({
+      code: code2,
+      chosung: 'ㅂㅈ',
+      player_a: 'A',
+      player_a_id: 'custom-a',
+      player_b: 'B',
+      player_b_id: 'custom-b',
+      status: 'playing',
+      turn: 'A',
+    })
+    .select()
+    .single();
+
+  if (customCreateError || !customRoom) {
+    throw new Error(`커스텀 초성 방 생성 실패: ${customCreateError?.message}`);
+  }
+
+  const customWords = ['박쥐', '부자'];
+  for (let i = 0; i < customWords.length; i++) {
+    const player = i % 2 === 0 ? 'A' : 'B';
+    const { data, error } = await supabase.rpc('submit_word', {
+      p_room_id: customRoom.id,
+      p_player: player,
+      p_word: customWords[i],
+    });
+    if (error) throw new Error(`커스텀 단어 제출 실패: ${error.message}`);
+    if (!data?.success) throw new Error(`커스텀 단어 거부됨: ${data?.reason}`);
+  }
+
+  await supabase.from('rooms').delete().eq('id', customRoom.id);
+
   console.log('PASS: 게임 플로우 검증 완료');
   console.log(' - 방 생성/입장 OK');
   console.log(' - 단어 제출/차례 넘기기 OK');
   console.log(' - 중복 단어 패배 OK');
   console.log(' - 다시하기 OK');
+  console.log(' - 커스텀 초성(ㅂㅈ) OK');
 }
 
 testGameFlow().catch((e) => {
