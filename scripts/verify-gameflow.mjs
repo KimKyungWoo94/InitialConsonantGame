@@ -40,13 +40,21 @@ async function testGameFlow() {
 
   const { data: joined, error: joinError } = await supabase
     .from('rooms')
-    .update({ player_b: '플레이어B', player_b_id: 'test-b', status: 'playing' })
+    .update({ player_b: '플레이어B', player_b_id: 'test-b' })
     .eq('id', room.id)
     .eq('status', 'waiting')
     .select()
     .single();
 
   if (joinError || !joined) throw new Error(`입장 실패: ${joinError?.message}`);
+
+  const { data: startResult, error: startError } = await supabase.rpc('start_game', {
+    p_room_id: room.id,
+    p_player_id: 'test-a',
+    p_first_turn: 'A',
+  });
+  if (startError) throw new Error(`게임 시작 실패: ${startError.message}`);
+  if (!startResult?.success) throw new Error(`게임 시작 거부됨: ${startResult?.reason}`);
 
   const words = ['사람', '사랑'];
   for (let i = 0; i < words.length; i++) {

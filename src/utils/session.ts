@@ -29,3 +29,13 @@ export function loadSession(): GameSession | null {
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
+
+const PLAYER_NAME_KEY = 'chosung_player_name';
+
+export function savePlayerName(name: string): void {
+  localStorage.setItem(PLAYER_NAME_KEY, name);
+}
+
+export function loadPlayerName(): string {
+  return localStorage.getItem(PLAYER_NAME_KEY) ?? '';
+}

@@ -33,7 +33,9 @@ export function useRoomSubscription(
 
 export function useAnswersSubscription(
   roomId: string | undefined,
-  onNewAnswer: (answer: Answer) => void
+  onInsert: (answer: Answer) => void,
+  onDelete: (answerId: string) => void,
+  onClear: () => void
 ) {
   useEffect(() => {
     if (!roomId) return;
@@ -49,7 +51,21 @@ export function useAnswersSubscription(
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onNewAnswer(payload.new as Answer);
+          if (payload.new) onInsert(payload.new as Answer);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'answers',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const deletedId = (payload.old as Answer | undefined)?.id;
+          if (deletedId) onDelete(deletedId);
+          else onClear();
         }
       )
       .subscribe();
@@ -57,5 +73,5 @@ export function useAnswersSubscription(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, onNewAnswer]);
+  }, [roomId, onInsert, onDelete, onClear]);
 }

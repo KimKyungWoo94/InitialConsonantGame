@@ -45,25 +45,62 @@ export async function joinRoom(
     .from('rooms')
     .select('*')
     .eq('code', code.toUpperCase())
-    .eq('status', 'waiting')
     .single();
 
   if (error || !room) throw new Error('방을 찾을 수 없습니다. 코드를 확인해주세요.');
+
+  if (room.status !== 'waiting') {
+    throw new Error('이미 게임이 시작된 방입니다.');
+  }
+
+  if (room.player_b_id) {
+    throw new Error('이 방은 2인 전용입니다. 이미 상대가 입장했어요.');
+  }
+
+  if (room.player_a_id === playerId) {
+    throw new Error('내가 만든 방입니다. 홈에서 이어하기를 이용해주세요.');
+  }
 
   const { data, error: updateError } = await supabase
     .from('rooms')
     .update({
       player_b: playerName,
       player_b_id: playerId,
-      status: 'playing',
     })
     .eq('id', room.id)
     .eq('status', 'waiting')
+    .is('player_b_id', null)
     .select()
     .single();
 
-  if (updateError || !data) throw new Error('이미 다른 사람이 입장했거나 방이 없습니다.');
+  if (updateError || !data) {
+    throw new Error('이미 다른 사람이 입장했거나 방이 없습니다.');
+  }
   return data as Room;
+}
+
+export async function startGame(
+  roomId: string,
+  playerId: string,
+  firstTurn: PlayerRole = 'A'
+): Promise<void> {
+  const { data, error } = await supabase.rpc('start_game', {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_first_turn: firstTurn,
+  });
+
+  if (error) {
+    if (error.message.includes('start_game')) {
+      throw new Error('게임 시작 설정이 필요해요. Supabase SQL Editor에서 006_start_game.sql을 실행해주세요.');
+    }
+    throw error;
+  }
+
+  const result = data as { success?: boolean; reason?: string };
+  if (!result?.success) {
+    throw new Error(result?.reason ?? '게임 시작에 실패했습니다.');
+  }
 }
 
 export async function fetchRoom(roomId: string): Promise<Room | null> {
@@ -134,26 +171,19 @@ export async function surrender(roomId: string, player: PlayerRole) {
   return data;
 }
 
-export async function rematch(roomId: string, chosung?: string) {
+export async function rematch(roomId: string, chosung?: string, firstTurn: PlayerRole = 'A') {
   const room = await fetchRoom(roomId);
   const length = (room?.chosung.length === 3 ? 3 : 2) as 2 | 3;
   const finalChosung = chosung ?? randomChosung(length);
 
-  const { error: deleteError } = await supabase
-    .from('answers')
-    .delete()
-    .eq('room_id', roomId);
-
-  if (deleteError) throw deleteError;
+  const { error: rpcError } = await supabase.rpc('rematch_game', {
+    p_room_id: roomId,
+  });
+  if (rpcError) throw rpcError;
 
   const { error: updateError } = await supabase
     .from('rooms')
-    .update({
-      status: 'playing',
-      winner: null,
-      turn: 'A',
-      chosung: finalChosung,
-    })
+    .update({ chosung: finalChosung, turn: firstTurn })
     .eq('id', roomId);
 
   if (updateError) throw updateError;

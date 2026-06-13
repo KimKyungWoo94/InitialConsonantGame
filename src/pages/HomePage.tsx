@@ -1,23 +1,50 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
 import { createRoom, joinRoom } from '../hooks/useRoom';
-import { getPlayerId, saveSession } from '../utils/session';
+import { getPlayerId, loadPlayerName, savePlayerName, saveSession } from '../utils/session';
+import { formatRelativeTime, loadRecentOpponents } from '../utils/recentOpponents';
 import { InstallPrompt } from '../components/InstallPrompt';
 import { formatChosung, type ChosungLength } from '../utils/chosung';
 
 type ChosungMode = 'random' | 'custom';
 
+function normalizeInviteCode(raw: string | null | undefined): string | null {
+  const code = raw?.toUpperCase().trim();
+  if (!code || !/^[A-Z0-9]{4}$/.test(code)) return null;
+  return code;
+}
+
 export function HomePage() {
   const navigate = useNavigate();
-  const [playerName, setPlayerName] = useState('');
+  const { code: pathCode } = useParams<{ code?: string }>();
+  const [searchParams] = useSearchParams();
+  const [playerName, setPlayerName] = useState(loadPlayerName);
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [chosungMode, setChosungMode] = useState<ChosungMode>('random');
   const [customChosung, setCustomChosung] = useState('');
   const [chosungLength, setChosungLength] = useState<ChosungLength>(2);
+  const [recentOpponents, setRecentOpponents] = useState(loadRecentOpponents);
+
+  useEffect(() => {
+    if (mode === 'menu') {
+      setRecentOpponents(loadRecentOpponents());
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    const code = normalizeInviteCode(pathCode ?? searchParams.get('code'));
+    if (!code) return;
+
+    setInviteCode(code);
+    setRoomCode(code);
+    setMode('join');
+    setError('');
+  }, [pathCode, searchParams]);
 
   const handleCreate = async () => {
     if (!playerName.trim()) {
@@ -40,6 +67,7 @@ export function HomePage() {
 
     try {
       const playerId = getPlayerId();
+      savePlayerName(playerName.trim());
       const room = await createRoom(playerName.trim(), playerId, chosung);
       saveSession({
         roomId: room.id,
@@ -70,6 +98,7 @@ export function HomePage() {
 
     try {
       const playerId = getPlayerId();
+      savePlayerName(playerName.trim());
       const room = await joinRoom(roomCode.trim(), playerName.trim(), playerId);
       saveSession({
         roomId: room.id,
@@ -97,6 +126,28 @@ export function HomePage() {
 
         {mode === 'menu' && (
           <div className="space-y-3">
+            {recentOpponents.length > 0 && (
+              <div className="rounded-2xl bg-white/5 p-4">
+                <p className="text-sm font-medium text-white">최근 상대</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {recentOpponents.map((opponent) => (
+                    <span
+                      key={`${opponent.name}-${opponent.playedAt}`}
+                      className="rounded-full bg-white/10 px-3 py-1.5 text-sm text-violet-100"
+                      title={formatRelativeTime(opponent.playedAt)}
+                    >
+                      {opponent.name}
+                      <span className="ml-1.5 text-xs text-violet-400">
+                        {formatRelativeTime(opponent.playedAt)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-violet-400">
+                  방을 만들고 링크를내면 다시 함께할 수 있어요
+                </p>
+              </div>
+            )}
             <button
               onClick={() => { setMode('create'); setError(''); }}
               className="w-full rounded-2xl bg-violet-500 px-6 py-4 text-lg font-semibold text-white shadow-lg shadow-violet-900/40 active:scale-[0.98]"
@@ -114,6 +165,11 @@ export function HomePage() {
 
         {(mode === 'create' || mode === 'join') && (
           <div className="space-y-4 rounded-3xl bg-white/10 p-5 backdrop-blur">
+            {mode === 'join' && inviteCode && (
+              <p className="rounded-xl bg-violet-500/20 px-3 py-2 text-center text-sm text-violet-100">
+                <span className="font-bold tracking-widest">{inviteCode}</span> 방에 초대받았어요!
+              </p>
+            )}
             <div>
               <label className="mb-1 block text-sm text-violet-200">닉네임</label>
               <input
@@ -192,7 +248,7 @@ export function HomePage() {
             </button>
 
             <button
-              onClick={() => { setMode('menu'); setError(''); }}
+              onClick={() => { setMode('menu'); setError(''); setInviteCode(null); }}
               className="w-full py-2 text-sm text-violet-300"
             >
               ← 돌아가기
@@ -203,6 +259,7 @@ export function HomePage() {
         <div className="mt-8 rounded-2xl bg-white/5 p-4 text-sm text-violet-200">
           <p className="font-medium text-white">게임 방법</p>
           <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>2인 전용 — 방 코드는 1명만 더 입장 가능</li>
             <li>랜덤 또는 직접 입력 초성 (예: {formatChosung('ㅅㄹ')})</li>
             <li>같은 초성 단어를 번갈아 입력</li>
             <li>중복·없는 단어는 다시 입력</li>

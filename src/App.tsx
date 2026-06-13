@@ -7,6 +7,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/join/:code" element={<HomePage />} />
         <Route path="/game/:roomId" element={<GamePage />} />
       </Routes>
     </BrowserRouter>
