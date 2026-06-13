@@ -67,11 +67,32 @@ async function testGameFlow() {
   });
 
   if (dupError) throw new Error(`중복 테스트 실패: ${dupError.message}`);
-  if (!dupResult?.gameOver) throw new Error('중복 단어 시 게임 종료가 되지 않음');
+  if (dupResult?.success) throw new Error('중복 단어가 성공하면 안 됨');
+  if (dupResult?.gameOver) throw new Error('중복 단어 시 게임이 종료되면 안 됨');
+
+  const { data: afterDup } = await supabase.from('rooms').select('status, turn').eq('id', room.id).single();
+  if (afterDup?.status !== 'playing') throw new Error('중복 후에도 게임이 진행 중이어야 함');
+  if (afterDup?.turn !== 'A') throw new Error('중복 후 차례가 유지되어야 함');
+
+  const { data: validWord, error: validError } = await supabase.rpc('submit_word', {
+    p_room_id: room.id,
+    p_player: 'A',
+    p_word: '사료',
+  });
+  if (validError) throw new Error(`중복 후 정상 제출 실패: ${validError.message}`);
+  if (!validWord?.success) throw new Error(`중복 후 정상 제출 거부됨: ${validWord?.reason}`);
 
   const { data: finished } = await supabase.from('rooms').select('*').eq('id', room.id).single();
-  if (finished?.status !== 'finished' || finished?.winner !== 'B') {
-    throw new Error('패배 처리 결과가 올바르지 않음');
+  if (finished?.status !== 'playing') {
+    throw new Error('중복 테스트 후 게임이 계속 진행되어야 함');
+  }
+
+  await supabase.from('answers').delete().eq('room_id', room.id);
+  await supabase.from('rooms').update({ status: 'finished', winner: 'B' }).eq('id', room.id);
+
+  const { data: finishedCheck } = await supabase.from('rooms').select('*').eq('id', room.id).single();
+  if (finishedCheck?.status !== 'finished') {
+    throw new Error('테스트 종료 처리 실패');
   }
 
   const { error: rematchError } = await supabase.rpc('rematch_game', { p_room_id: room.id });
@@ -120,7 +141,7 @@ async function testGameFlow() {
   console.log('PASS: 게임 플로우 검증 완료');
   console.log(' - 방 생성/입장 OK');
   console.log(' - 단어 제출/차례 넘기기 OK');
-  console.log(' - 중복 단어 패배 OK');
+  console.log(' - 중복 단어 재입력 OK');
   console.log(' - 다시하기 OK');
   console.log(' - 커스텀 초성(ㅂㅈ) OK');
 }

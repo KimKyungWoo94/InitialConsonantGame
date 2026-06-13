@@ -205,7 +205,8 @@ export function HomePage() {
           <ul className="mt-2 list-disc space-y-1 pl-4">
             <li>랜덤 또는 직접 입력 초성 (예: {formatChosung('ㅅㄹ')})</li>
             <li>같은 초성 단어를 번갈아 입력</li>
-            <li>중복 단어 or 포기하면 패배!</li>
+            <li>중복·없는 단어는 다시 입력</li>
+            <li>포기하면 패배!</li>
           </ul>
         </div>
       </div>

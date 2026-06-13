@@ -60,9 +60,24 @@ Vercel 환경 변수 (이미 설정됨):
 
 ## 게임 방법
 
-- 랜덤 초성(예: ㅅㄹ)이 주어집니다
-- 같은 초성 단어를 번갈아 입력합니다
-- 중복 단어를 내거나 포기하면 패배!
+- 랜덤 또는 직접 입력 초성 (예: ㅅㄹ)
+- 같은 초성 단어를 번갈아 입력
+- **중복·없는 단어** → 다시 입력 (패배 아님)
+- **포기** → 패배
+
+## 사전 검증 설정 (1회)
+
+1. [표준국어대사전 Open API](https://stdict.korean.go.kr/openapi/openApiInfo.do) 에서 **인증키 발급** (무료)
+2. Vercel → Project Settings → Environment Variables:
+   - `STDICT_API_KEY` = 발급받은 키
+3. 로컬 개발 시 `.env.local`에도 추가:
+   ```
+   STDICT_API_KEY=발급받은_키
+   ```
+
+## DB 업데이트 (중복 규칙 변경 시 1회)
+
+Supabase SQL Editor에서 `supabase/migrations/003_duplicate_retry.sql` 실행
 
 ## 기술 스택
 

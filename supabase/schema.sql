@@ -93,17 +93,9 @@ BEGIN
   ) INTO v_duplicate;
 
   IF v_duplicate THEN
-    UPDATE rooms
-    SET status = 'finished',
-        winner = CASE WHEN p_player = 'A' THEN 'B' ELSE 'A' END,
-        last_activity = now()
-    WHERE id = p_room_id;
-
     RETURN json_build_object(
       'success', false,
-      'reason', '이미 나온 단어예요!',
-      'gameOver', true,
-      'loser', p_player
+      'reason', '이미 사용한 단어예요! 다른 단어를 입력해주세요.'
     );
   END IF;
 

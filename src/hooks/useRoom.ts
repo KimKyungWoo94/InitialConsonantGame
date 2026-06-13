@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { PlayerRole, Room, SubmitWordResult } from '../types';
 import { normalizeWord, randomChosung, validateChosung } from '../utils/chosung';
+import { validateWordExists } from '../utils/dictionary';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -92,13 +93,25 @@ export async function submitWord(
   player: PlayerRole,
   word: string,
   chosung: string,
-  _usedWords: string[]
+  usedWords: string[]
 ): Promise<SubmitWordResult> {
   const normalized = normalizeWord(word);
   const validation = validateChosung(normalized, chosung);
 
   if (!validation.ok) {
     return { success: false, reason: validation.reason };
+  }
+
+  if (usedWords.some((w) => normalizeWord(w) === normalized)) {
+    return {
+      success: false,
+      reason: '이미 사용한 단어예요! 다른 단어를 입력해주세요.',
+    };
+  }
+
+  const dictionaryCheck = await validateWordExists(normalized);
+  if (!dictionaryCheck.ok) {
+    return { success: false, reason: dictionaryCheck.reason };
   }
 
   const { data, error } = await supabase.rpc('submit_word', {

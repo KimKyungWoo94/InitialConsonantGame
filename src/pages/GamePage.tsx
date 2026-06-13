@@ -106,7 +106,6 @@ export function GamePage() {
 
       if (!result.success) {
         setError(result.reason ?? '제출에 실패했습니다.');
-        if (result.gameOver) setWord('');
         return;
       }
 
