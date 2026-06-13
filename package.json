@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "verify": "node scripts/verify-supabase.mjs",
     "verify:game": "node scripts/verify-gameflow.mjs",
-    "verify:all": "npm run verify && npm run verify:game"
+    "verify:all": "npm run verify && npm run verify:game",
+    "setup:github": "node scripts/setup-github.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
