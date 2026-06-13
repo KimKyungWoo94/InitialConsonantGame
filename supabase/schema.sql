@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS answers (
   room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   player     TEXT NOT NULL,
   word       TEXT NOT NULL,
+  definition TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -56,7 +57,8 @@ END $$;
 CREATE OR REPLACE FUNCTION submit_word(
   p_room_id UUID,
   p_player TEXT,
-  p_word TEXT
+  p_word TEXT,
+  p_definition TEXT DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -100,7 +102,8 @@ BEGIN
     );
   END IF;
 
-  INSERT INTO answers (room_id, player, word) VALUES (p_room_id, p_player, v_normalized);
+  INSERT INTO answers (room_id, player, word, definition)
+  VALUES (p_room_id, p_player, v_normalized, nullif(trim(p_definition), ''));
 
   UPDATE rooms
   SET turn = CASE WHEN p_player = 'A' THEN 'B' ELSE 'A' END,

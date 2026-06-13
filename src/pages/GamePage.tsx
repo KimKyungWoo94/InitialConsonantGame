@@ -613,6 +613,9 @@ export function GamePage() {
                   >
                     <p className="text-xs opacity-70">{isMine ? '나' : opponentName}</p>
                     <p className="text-lg font-medium">{answer.word}</p>
+                    {answer.definition && (
+                      <p className="mt-0.5 text-xs leading-snug opacity-75">{answer.definition}</p>
+                    )}
                   </div>
                 </div>
               );

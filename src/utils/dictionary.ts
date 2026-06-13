@@ -1,5 +1,5 @@
 export type DictionaryValidation =
-  | { ok: true }
+  | { ok: true; definition?: string }
   | { ok: false; reason: string };
 
 export async function validateWordExists(word: string): Promise<DictionaryValidation> {
@@ -17,7 +17,11 @@ export async function validateWordExists(word: string): Promise<DictionaryValida
       return { ok: false, reason: '사전 검증에 실패했습니다. 다시 시도해주세요.' };
     }
 
-    const data = (await res.json()) as { exists?: boolean; reason?: string };
+    const data = (await res.json()) as {
+      exists?: boolean;
+      definition?: string;
+      reason?: string;
+    };
 
     if (!data.exists) {
       return {
@@ -26,7 +30,7 @@ export async function validateWordExists(word: string): Promise<DictionaryValida
       };
     }
 
-    return { ok: true };
+    return { ok: true, definition: data.definition };
   } catch {
     return { ok: false, reason: '사전 검증에 실패했습니다. 다시 시도해주세요.' };
   }

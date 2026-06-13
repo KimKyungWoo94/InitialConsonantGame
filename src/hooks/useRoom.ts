@@ -155,6 +155,7 @@ export async function submitWord(
     p_room_id: roomId,
     p_player: player,
     p_word: normalized,
+    p_definition: dictionaryCheck.definition ?? null,
   });
 
   if (error) throw error;

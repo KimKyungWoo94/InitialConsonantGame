@@ -21,6 +21,7 @@ export interface Answer {
   room_id: string;
   player: PlayerRole;
   word: string;
+  definition?: string | null;
   created_at: string;
 }
 

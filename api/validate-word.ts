@@ -1,5 +1,10 @@
+interface StdictSense {
+  definition?: string;
+}
+
 interface StdictItem {
   word?: string;
+  sense?: StdictSense | StdictSense[];
 }
 
 interface StdictResponse {
@@ -9,11 +14,36 @@ interface StdictResponse {
   };
 }
 
+export interface WordLookupResult {
+  exists: boolean;
+  definition?: string;
+  reason?: string;
+}
+
 function normalizeDictWord(word: string): string {
   return word.replace(/\([^)]*\)/g, '').replace(/[0-9]/g, '').trim();
 }
 
-async function lookupWord(word: string, apiKey: string): Promise<boolean> {
+function briefDefinition(raw: string): string {
+  const text = raw
+    .replace(/\^/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (text.length <= 80) return text;
+  return `${text.slice(0, 79)}…`;
+}
+
+function extractDefinition(item: StdictItem): string | undefined {
+  const sense = item.sense;
+  if (!sense) return undefined;
+
+  const raw = Array.isArray(sense) ? sense[0]?.definition : sense.definition;
+  return raw ? briefDefinition(raw) : undefined;
+}
+
+async function lookupWord(word: string, apiKey: string): Promise<WordLookupResult> {
   const url = new URL('https://stdict.korean.go.kr/api/search.do');
   url.searchParams.set('key', apiKey);
   url.searchParams.set('req_type', 'json');
@@ -27,16 +57,26 @@ async function lookupWord(word: string, apiKey: string): Promise<boolean> {
   try {
     data = JSON.parse(text) as StdictResponse;
   } catch {
-    return false;
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
   }
 
   const total = Number(data?.channel?.total ?? 0);
-  if (!total) return false;
+  if (!total) {
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
+  }
 
   const items = data?.channel?.item;
   const list: StdictItem[] = items ? (Array.isArray(items) ? items : [items]) : [];
+  const match = list.find((item) => normalizeDictWord(item.word ?? '') === word);
 
-  return list.some((item) => normalizeDictWord(item.word ?? '') === word);
+  if (!match) {
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
+  }
+
+  return {
+    exists: true,
+    definition: extractDefinition(match),
+  };
 }
 
 export default async function handler(
@@ -67,10 +107,11 @@ export default async function handler(
   }
 
   try {
-    const exists = await lookupWord(word, key);
+    const result = await lookupWord(word, key);
     return response.status(200).json({
-      exists,
-      reason: exists ? undefined : '사전에 없는 단어예요! 다른 단어를 입력해주세요.',
+      exists: result.exists,
+      definition: result.definition,
+      reason: result.exists ? undefined : result.reason,
     });
   } catch {
     return response.status(200).json({
