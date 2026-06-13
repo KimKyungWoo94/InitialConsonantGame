@@ -125,6 +125,16 @@ export async function fetchAnswers(roomId: string) {
   return data ?? [];
 }
 
+function formatSubmitRpcError(message: string): string {
+  if (message.includes('submit_word') || message.includes('PGRST202')) {
+    return '단어 제출 설정 오류예요. Supabase SQL Editor에서 008_submit_word_fix.sql을 실행해주세요.';
+  }
+  if (message.includes('definition')) {
+    return '뜻풀이 저장 설정이 필요해요. Supabase에서 007 SQL을 실행해주세요.';
+  }
+  return message;
+}
+
 export async function submitWord(
   roomId: string,
   player: PlayerRole,
@@ -158,8 +168,28 @@ export async function submitWord(
     p_definition: dictionaryCheck.definition ?? null,
   });
 
-  if (error) throw error;
-  return data as SubmitWordResult;
+  if (error) {
+    return {
+      success: false,
+      reason: formatSubmitRpcError(error.message),
+    };
+  }
+
+  if (!data || typeof data !== 'object') {
+    return { success: false, reason: '서버 응답이 없습니다. 잠시 후 다시 시도해주세요.' };
+  }
+
+  const result = data as SubmitWordResult;
+  if (!result.success) {
+    return {
+      ...result,
+      reason:
+        result.reason ??
+        (result.gameOver ? '게임이 종료되었습니다.' : '제출이 거부되었습니다. 다시 시도해주세요.'),
+    };
+  }
+
+  return result;
 }
 
 export async function surrender(roomId: string, player: PlayerRole) {

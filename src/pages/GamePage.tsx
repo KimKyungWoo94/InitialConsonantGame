@@ -232,7 +232,7 @@ export function GamePage() {
       const result = await submitWord(room.id, player, word, room.chosung, usedWords);
 
       if (!result.success) {
-        setError(result.reason ?? '제출에 실패했습니다.');
+        setError(result.reason ?? '제출이 거부되었습니다.');
         focusInput();
         return;
       }
