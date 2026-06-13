@@ -1,0 +1,18 @@
+{
+  "name": "초성 게임",
+  "short_name": "초성게임",
+  "description": "실시간 초성 단어 대결 게임",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1b4b",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
