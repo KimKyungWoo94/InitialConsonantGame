@@ -220,3 +220,47 @@ BEGIN
   RETURN json_build_object('success', true);
 END;
 $$;
+
+-- 오래된 방 자동 정리 (009_cleanup_stale_rooms.sql 과 동일)
+-- pg_cron 스케줄 등록은 migrations/009_cleanup_stale_rooms.sql 을 SQL Editor에서 실행하세요.
+CREATE OR REPLACE FUNCTION cleanup_stale_rooms()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_waiting_deleted INT;
+  v_finished_deleted INT;
+  v_playing_deleted INT;
+BEGIN
+  DELETE FROM rooms
+  WHERE status = 'waiting'
+    AND created_at < now() - interval '24 hours';
+  GET DIAGNOSTICS v_waiting_deleted = ROW_COUNT;
+
+  DELETE FROM rooms
+  WHERE status = 'finished'
+    AND last_activity < now() - interval '7 days';
+  GET DIAGNOSTICS v_finished_deleted = ROW_COUNT;
+
+  DELETE FROM rooms
+  WHERE status = 'playing'
+    AND last_activity < now() - interval '7 days';
+  GET DIAGNOSTICS v_playing_deleted = ROW_COUNT;
+
+  RETURN json_build_object(
+    'success', true,
+    'deleted', json_build_object(
+      'waiting', v_waiting_deleted,
+      'finished', v_finished_deleted,
+      'playing', v_playing_deleted,
+      'total', v_waiting_deleted + v_finished_deleted + v_playing_deleted
+    ),
+    'ran_at', now()
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION cleanup_stale_rooms() FROM PUBLIC;
+REVOKE ALL ON FUNCTION cleanup_stale_rooms() FROM anon, authenticated;

@@ -173,7 +173,7 @@ async function main() {
     issues.push({
       level: '개선권장',
       item: 'rooms 테이블 누적',
-      detail: `${roomCount}건 — 종료된 방 정리(cron) 권장`,
+      detail: `${roomCount}건 — 009_cleanup_stale_rooms.sql 적용 시 자동 정리`,
     });
   }
 
