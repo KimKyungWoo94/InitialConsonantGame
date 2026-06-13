@@ -39,10 +39,19 @@ Supabase 연결, DB, 게임 플로우를 자동 검증합니다.
 
 ### 4. Vercel 배포
 
-1. GitHub에 코드 push
-2. [Vercel](https://vercel.com) → Import Project
-3. Environment Variables에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` 추가
-4. Deploy
+배포 URL: **https://initial-consonant-game.vercel.app**
+
+1. GitHub 연동 (최초 1회):
+   ```bash
+   gh auth login -h github.com -p https -w
+   npm run setup:github
+   npx vercel git connect --yes
+   ```
+2. 이후 코드 push 시 Vercel이 자동 배포합니다.
+
+Vercel 환경 변수 (이미 설정됨):
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 ### 5. 아이폰에서 사용
 
