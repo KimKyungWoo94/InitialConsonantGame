@@ -10,15 +10,20 @@ import {
   surrender,
 } from '../hooks/useRoom';
 import { useAnswersSubscription, useRoomSubscription } from '../hooks/useGameSubscription';
-import type { Answer, GameSession, PlayerRole, Room } from '../types';
+import { useNudge } from '../hooks/useNudge';
+import type { Answer, GameSession, PlayerRole, Room, SubmitWordResult } from '../types';
+import { MAX_CONSECUTIVE_FAILURES } from '../types';
+import type { NudgePayload } from '../types/nudge';
 import { formatChosung, type ChosungLength } from '../utils/chosung';
 import { formatDuration } from '../utils/formatDuration';
 import { addRecentOpponent } from '../utils/recentOpponents';
 import { loadSession, saveSession } from '../utils/session';
 import { copyRoomCode, shareRoomInvite } from '../utils/share';
 import { notifyMyTurn } from '../utils/turnAlert';
+import { notifyNudgeReceived } from '../utils/nudgeAlert';
 import { appendOptimisticAnswer, mergeAnswer } from '../utils/answerSync';
 import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
+import { NudgeEffect } from '../components/NudgeEffect';
 
 export function GamePage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -47,9 +52,12 @@ export function GamePage() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshInflightRef = useRef<Promise<void> | null>(null);
   const [gameStats, setGameStats] = useState({ wordCount: 0, durationMs: 0 });
+  const [nudgeEffect, setNudgeEffect] = useState<NudgePayload | null>(null);
 
   const player: PlayerRole | null = session?.player ?? null;
   const isMyTurn = room?.status === 'playing' && room.turn === player;
+  const myStrikes =
+    player === 'A' ? (room?.player_a_strikes ?? 0) : player === 'B' ? (room?.player_b_strikes ?? 0) : 0;
   const opponentName =
     player === 'A' ? room?.player_b : player === 'B' ? room?.player_a : null;
 
@@ -120,6 +128,18 @@ export function GamePage() {
   const handleClearAnswers = useCallback(() => {
     setAnswers([]);
   }, []);
+
+  const handleNudgeReceived = useCallback((payload: NudgePayload) => {
+    notifyNudgeReceived();
+    setNudgeEffect(payload);
+  }, []);
+
+  const { sendNudge, canNudge, cooldownSeconds, sentMessage } = useNudge(
+    roomId,
+    player,
+    session?.playerName,
+    handleNudgeReceived
+  );
 
   useRoomSubscription(roomId, handleRoomUpdate);
   useAnswersSubscription(roomId, handleNewAnswer, handleDeleteAnswer, handleClearAnswers);
@@ -246,6 +266,37 @@ export function GamePage() {
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
+  const applyStrikeUpdate = (result: SubmitWordResult) => {
+    if (!player || result.strikes === undefined) return;
+
+    setRoom((prev) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        player_a_strikes: player === 'A' ? result.strikes! : prev.player_a_strikes ?? 0,
+        player_b_strikes: player === 'B' ? result.strikes! : prev.player_b_strikes ?? 0,
+        ...(result.gameOver
+          ? {
+              status: 'finished' as const,
+              winner: (player === 'A' ? 'B' : 'A') as PlayerRole,
+            }
+          : {}),
+      };
+      roomRef.current = updated;
+      return updated;
+    });
+  };
+
+  const formatSubmitError = (result: SubmitWordResult) => {
+    const base = result.reason ?? '제출이 거부되었습니다.';
+    if (result.gameOver) return base;
+    if (result.strikes !== undefined) {
+      const max = result.maxStrikes ?? MAX_CONSECUTIVE_FAILURES;
+      return `${base} (연속 실패 ${result.strikes}/${max})`;
+    }
+    return base;
+  };
+
   const handleSubmit = async () => {
     if (!room || !player || !word.trim() || submitting) return;
 
@@ -257,7 +308,8 @@ export function GamePage() {
       const result = await submitWord(room.id, player, word, room.chosung, usedWords);
 
       if (!result.success) {
-        setError(result.reason ?? '제출이 거부되었습니다.');
+        applyStrikeUpdate(result);
+        setError(formatSubmitError(result));
         focusInput();
         return;
       }
@@ -265,7 +317,12 @@ export function GamePage() {
       const nextTurn: PlayerRole = player === 'A' ? 'B' : 'A';
       setRoom((prev) => {
         if (!prev) return prev;
-        const updated = { ...prev, turn: nextTurn };
+        const updated = {
+          ...prev,
+          turn: nextTurn,
+          player_a_strikes: player === 'A' ? 0 : prev.player_a_strikes ?? 0,
+          player_b_strikes: player === 'B' ? 0 : prev.player_b_strikes ?? 0,
+        };
         roomRef.current = updated;
         return updated;
       });
@@ -614,6 +671,7 @@ export function GamePage() {
 
   return (
     <div className="flex h-dvh flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <NudgeEffect payload={nudgeEffect} onDone={() => setNudgeEffect(null)} />
       <div className="mx-auto flex h-full w-full max-w-md min-h-0 flex-col">
         <header className="mb-4 shrink-0 text-center">
           <p className="text-sm text-violet-300">
@@ -625,6 +683,11 @@ export function GamePage() {
           <p className={`mt-2 text-sm font-medium ${isMyTurn ? 'text-green-300' : 'text-violet-300'}`}>
             {isMyTurn ? '내 차례!' : '상대방 차례...'}
           </p>
+          {isMyTurn && myStrikes > 0 && (
+            <p className="mt-1 text-xs text-amber-300">
+              연속 실패 {myStrikes}/{MAX_CONSECUTIVE_FAILURES} · {MAX_CONSECUTIVE_FAILURES}회 시 패배
+            </p>
+          )}
           {answers.length > 0 && (
             <p className="mt-1 text-xs text-violet-400">지금까지 {answers.length}개 단어</p>
           )}
@@ -685,14 +748,27 @@ export function GamePage() {
               disabled={!isMyTurn || submitting}
               className="flex-1 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder:text-violet-400/50 outline-none focus:border-violet-300 disabled:opacity-50"
             />
-            <button
-              onClick={handleSubmit}
-              disabled={!isMyTurn || !word.trim() || submitting}
-              className="rounded-2xl bg-violet-500 px-5 font-semibold text-white disabled:opacity-40"
-            >
-              제출
-            </button>
+            {isMyTurn ? (
+              <button
+                onClick={handleSubmit}
+                disabled={!word.trim() || submitting}
+                className="rounded-2xl bg-violet-500 px-5 font-semibold text-white disabled:opacity-40"
+              >
+                제출
+              </button>
+            ) : (
+              <button
+                onClick={() => void sendNudge()}
+                disabled={!canNudge}
+                className="rounded-2xl bg-amber-400/90 px-4 font-semibold text-violet-950 disabled:opacity-40"
+              >
+                {canNudge ? '재촉 🐣' : `${cooldownSeconds}s`}
+              </button>
+            )}
           </div>
+          {sentMessage && (
+            <p className="text-center text-sm text-amber-200">{sentMessage}</p>
+          )}
           <button
             onClick={handleSurrender}
             className="w-full py-2 text-sm text-red-300"

@@ -1,6 +1,6 @@
 export type DictionaryValidation =
   | { ok: true; definition?: string }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; strikeable?: boolean };
 
 const validatedWordCache = new Map<string, DictionaryValidation>();
 
@@ -14,12 +14,17 @@ export async function validateWordExists(word: string): Promise<DictionaryValida
     if (res.status === 503) {
       return {
         ok: false,
+        strikeable: false,
         reason: '사전 API가 아직 설정되지 않았어요. (관리자에게 문의)',
       };
     }
 
     if (!res.ok) {
-      return { ok: false, reason: '사전 검증에 실패했습니다. 다시 시도해주세요.' };
+      return {
+        ok: false,
+        strikeable: false,
+        reason: '사전 검증에 실패했습니다. 다시 시도해주세요.',
+      };
     }
 
     const data = (await res.json()) as {
@@ -39,6 +44,10 @@ export async function validateWordExists(word: string): Promise<DictionaryValida
     validatedWordCache.set(word, result);
     return result;
   } catch {
-    return { ok: false, reason: '사전 검증에 실패했습니다. 다시 시도해주세요.' };
+    return {
+      ok: false,
+      strikeable: false,
+      reason: '사전 검증에 실패했습니다. 다시 시도해주세요.',
+    };
   }
 }

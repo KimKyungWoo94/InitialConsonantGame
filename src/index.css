@@ -16,3 +16,43 @@ body {
 input, button {
   font-family: inherit;
 }
+
+@keyframes nudge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.06) rotate(2deg);
+  }
+  70% {
+    transform: scale(0.98) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes nudge-float {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.7);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-72px) scale(1.15);
+  }
+}
+
+.nudge-pop {
+  animation: nudge-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.nudge-float {
+  animation: nudge-float 2.2s ease-out both;
+}

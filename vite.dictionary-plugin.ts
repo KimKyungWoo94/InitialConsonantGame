@@ -35,9 +35,10 @@ export function dictionaryApiPlugin(apiKey?: string): Plugin {
           res.end(
             JSON.stringify({
               exists: result.exists,
+              definition: result.definition,
               reason: result.exists
                 ? undefined
-                : '사전에 없는 단어예요! 다른 단어를 입력해주세요.',
+                : (result.reason ?? '사전에 없는 단어예요! 다른 단어를 입력해주세요.'),
             })
           );
         } catch {

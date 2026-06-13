@@ -14,6 +14,8 @@ export interface Room {
   winner: PlayerRole | null;
   last_activity: string;
   created_at: string;
+  player_a_strikes?: number;
+  player_b_strikes?: number;
 }
 
 export interface Answer {
@@ -37,5 +39,10 @@ export interface SubmitWordResult {
   reason?: string;
   gameOver?: boolean;
   loser?: PlayerRole;
+  strikes?: number;
+  strikesRemaining?: number;
+  maxStrikes?: number;
   answer?: Pick<Answer, 'word' | 'player' | 'definition'>;
 }
+
+export const MAX_CONSECUTIVE_FAILURES = 5;

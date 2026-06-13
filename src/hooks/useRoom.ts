@@ -129,10 +129,52 @@ function formatSubmitRpcError(message: string): string {
   if (message.includes('submit_word') || message.includes('PGRST202')) {
     return '단어 제출 설정 오류예요. Supabase SQL Editor에서 008_submit_word_fix.sql을 실행해주세요.';
   }
+  if (message.includes('register_failed_submit')) {
+    return '연속 실패 처리 설정이 필요해요. Supabase SQL Editor에서 010_consecutive_strikes.sql을 실행해주세요.';
+  }
   if (message.includes('definition')) {
     return '뜻풀이 저장 설정이 필요해요. Supabase에서 007 SQL을 실행해주세요.';
   }
   return message;
+}
+
+function parseSubmitResult(data: unknown, fallbackReason: string): SubmitWordResult {
+  if (!data || typeof data !== 'object') {
+    return { success: false, reason: fallbackReason };
+  }
+
+  const result = data as SubmitWordResult;
+  if (!result.success) {
+    return {
+      ...result,
+      reason:
+        result.reason ??
+        (result.gameOver ? '게임이 종료되었습니다.' : fallbackReason),
+    };
+  }
+
+  return result;
+}
+
+async function registerFailedSubmit(
+  roomId: string,
+  player: PlayerRole,
+  reason: string
+): Promise<SubmitWordResult> {
+  const { data, error } = await supabase.rpc('register_failed_submit', {
+    p_room_id: roomId,
+    p_player: player,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      reason: formatSubmitRpcError(error.message),
+    };
+  }
+
+  return parseSubmitResult(data, reason);
 }
 
 export async function submitWord(
@@ -150,15 +192,19 @@ export async function submitWord(
   }
 
   if (usedWords.some((w) => normalizeWord(w) === normalized)) {
-    return {
-      success: false,
-      reason: '이미 사용한 단어예요! 다른 단어를 입력해주세요.',
-    };
+    return registerFailedSubmit(
+      roomId,
+      player,
+      '이미 사용한 단어예요! 다른 단어를 입력해주세요.'
+    );
   }
 
   const dictionaryCheck = await validateWordExists(normalized);
   if (!dictionaryCheck.ok) {
-    return { success: false, reason: dictionaryCheck.reason };
+    if (dictionaryCheck.strikeable === false) {
+      return { success: false, reason: dictionaryCheck.reason };
+    }
+    return registerFailedSubmit(roomId, player, dictionaryCheck.reason);
   }
 
   const { data, error } = await supabase.rpc('submit_word', {
@@ -179,14 +225,12 @@ export async function submitWord(
     return { success: false, reason: '서버 응답이 없습니다. 잠시 후 다시 시도해주세요.' };
   }
 
-  const result = data as SubmitWordResult;
+  const result = parseSubmitResult(
+    data,
+    '제출이 거부되었습니다. 다시 시도해주세요.'
+  );
   if (!result.success) {
-    return {
-      ...result,
-      reason:
-        result.reason ??
-        (result.gameOver ? '게임이 종료되었습니다.' : '제출이 거부되었습니다. 다시 시도해주세요.'),
-    };
+    return result;
   }
 
   return {

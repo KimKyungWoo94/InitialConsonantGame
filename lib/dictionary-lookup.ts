@@ -1,22 +1,52 @@
+interface StdictSense {
+  definition?: string;
+}
+
 interface StdictItem {
   word?: string;
+  sense?: StdictSense | StdictSense[];
 }
 
 interface StdictResponse {
   channel?: {
     item?: StdictItem | StdictItem[];
-    total?: number;
+    total?: number | string;
   };
+}
+
+export interface WordLookupResult {
+  exists: boolean;
+  definition?: string;
+  reason?: string;
 }
 
 function normalizeDictWord(word: string): string {
   return word.replace(/\([^)]*\)/g, '').replace(/[0-9]/g, '').trim();
 }
 
+function briefDefinition(raw: string): string {
+  const text = raw
+    .replace(/\^/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (text.length <= 80) return text;
+  return `${text.slice(0, 79)}…`;
+}
+
+function extractDefinition(item: StdictItem): string | undefined {
+  const sense = item.sense;
+  if (!sense) return undefined;
+
+  const raw = Array.isArray(sense) ? sense[0]?.definition : sense.definition;
+  return raw ? briefDefinition(raw) : undefined;
+}
+
 export async function lookupWordInDictionary(
   word: string,
   apiKey: string
-): Promise<{ exists: boolean; reason?: string }> {
+): Promise<WordLookupResult> {
   const url = new URL('https://stdict.korean.go.kr/api/search.do');
   url.searchParams.set('key', apiKey);
   url.searchParams.set('req_type', 'json');
@@ -24,12 +54,30 @@ export async function lookupWordInDictionary(
   url.searchParams.set('type_search', 'search');
 
   const apiRes = await fetch(url.toString());
-  const data = (await apiRes.json()) as StdictResponse;
+  const text = await apiRes.text();
+
+  let data: StdictResponse;
+  try {
+    data = JSON.parse(text) as StdictResponse;
+  } catch {
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
+  }
+
+  const total = Number(data?.channel?.total ?? 0);
+  if (!total) {
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
+  }
 
   const items = data?.channel?.item;
   const list: StdictItem[] = items ? (Array.isArray(items) ? items : [items]) : [];
+  const match = list.find((item) => normalizeDictWord(item.word ?? '') === word);
 
-  const exists = list.some((item) => normalizeDictWord(item.word ?? '') === word);
+  if (!match) {
+    return { exists: false, reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.' };
+  }
 
-  return { exists };
+  return {
+    exists: true,
+    definition: extractDefinition(match),
+  };
 }

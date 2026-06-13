@@ -76,11 +76,13 @@ async function testGameFlow() {
 
   if (dupError) throw new Error(`중복 테스트 실패: ${dupError.message}`);
   if (dupResult?.success) throw new Error('중복 단어가 성공하면 안 됨');
-  if (dupResult?.gameOver) throw new Error('중복 단어 시 게임이 종료되면 안 됨');
+  if (dupResult?.gameOver) throw new Error('중복 1회로 게임이 종료되면 안 됨');
+  if (dupResult?.strikes !== 1) throw new Error(`중복 1회 strikes=1 이어야 함 (got ${dupResult?.strikes})`);
 
-  const { data: afterDup } = await supabase.from('rooms').select('status, turn').eq('id', room.id).single();
+  const { data: afterDup } = await supabase.from('rooms').select('status, turn, player_a_strikes').eq('id', room.id).single();
   if (afterDup?.status !== 'playing') throw new Error('중복 후에도 게임이 진행 중이어야 함');
   if (afterDup?.turn !== 'A') throw new Error('중복 후 차례가 유지되어야 함');
+  if (afterDup?.player_a_strikes !== 1) throw new Error('중복 후 player_a_strikes=1 이어야 함');
 
   const { data: validWord, error: validError } = await supabase.rpc('submit_word', {
     p_room_id: room.id,
@@ -90,10 +92,31 @@ async function testGameFlow() {
   if (validError) throw new Error(`중복 후 정상 제출 실패: ${validError.message}`);
   if (!validWord?.success) throw new Error(`중복 후 정상 제출 거부됨: ${validWord?.reason}`);
 
-  const { data: finished } = await supabase.from('rooms').select('*').eq('id', room.id).single();
-  if (finished?.status !== 'playing') {
-    throw new Error('중복 테스트 후 게임이 계속 진행되어야 함');
+  const { data: afterSuccess } = await supabase.from('rooms').select('player_a_strikes, turn').eq('id', room.id).single();
+  if (afterSuccess?.player_a_strikes !== 0) throw new Error('성공 제출 후 strikes가 0으로 초기화되어야 함');
+  if (afterSuccess?.turn !== 'B') throw new Error('성공 제출 후 차례가 넘어가야 함');
+
+  // 연속 5회 실패 시 패배
+  await supabase.from('rooms').update({ turn: 'B', player_b_strikes: 0 }).eq('id', room.id);
+  for (let i = 1; i <= 5; i++) {
+    const { data: failResult, error: failError } = await supabase.rpc('register_failed_submit', {
+      p_room_id: room.id,
+      p_player: 'B',
+      p_reason: '사전에 없는 단어예요!',
+    });
+    if (failError) throw new Error(`연속 실패 테스트 ${i}회: ${failError.message}`);
+    if (i < 5) {
+      if (failResult?.gameOver) throw new Error(`${i}회 실패로 게임이 종료되면 안 됨`);
+      if (failResult?.strikes !== i) throw new Error(`${i}회 실패 strikes=${i} 이어야 함`);
+    } else {
+      if (!failResult?.gameOver) throw new Error('5회 연속 실패 시 게임이 종료되어야 함');
+      if (failResult?.loser !== 'B') throw new Error('5회 연속 실패 시 패자는 B여야 함');
+    }
   }
+
+  const { data: afterFiveFails } = await supabase.from('rooms').select('status, winner').eq('id', room.id).single();
+  if (afterFiveFails?.status !== 'finished') throw new Error('5회 실패 후 status=finished 여야 함');
+  if (afterFiveFails?.winner !== 'A') throw new Error('5회 실패 후 winner=A 여야 함');
 
   await supabase.from('answers').delete().eq('room_id', room.id);
   await supabase.from('rooms').update({ status: 'finished', winner: 'B' }).eq('id', room.id);
@@ -150,6 +173,8 @@ async function testGameFlow() {
   console.log(' - 방 생성/입장 OK');
   console.log(' - 단어 제출/차례 넘기기 OK');
   console.log(' - 중복 단어 재입력 OK');
+  console.log(' - 연속 실패 5회 패배 OK');
+  console.log(' - 성공 시 strikes 초기화 OK');
   console.log(' - 다시하기 OK');
   console.log(' - 커스텀 초성(ㅂㅈ) OK');
 }
