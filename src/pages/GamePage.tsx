@@ -574,9 +574,9 @@ export function GamePage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-        <header className="mb-4 text-center">
+    <div className="flex h-dvh flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex h-full w-full max-w-md min-h-0 flex-col">
+        <header className="mb-4 shrink-0 text-center">
           <p className="text-sm text-violet-300">
             상대: <span className="font-medium text-white">{opponentName ?? '...'}</span>
           </p>
@@ -593,7 +593,7 @@ export function GamePage() {
 
         <div
           ref={historyRef}
-          className="mb-4 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-black/20 p-4"
+          className="mb-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain rounded-2xl bg-black/20 p-4"
         >
           {answers.length === 0 ? (
             <p className="text-center text-sm text-violet-400">첫 단어를 입력하세요!</p>
@@ -625,12 +625,12 @@ export function GamePage() {
         </div>
 
         {error && (
-          <p className="mb-2 rounded-xl bg-red-500/20 px-3 py-2 text-center text-sm text-red-200">
+          <p className="mb-2 shrink-0 rounded-xl bg-red-500/20 px-3 py-2 text-center text-sm text-red-200">
             {error}
           </p>
         )}
 
-        <div className="space-y-3">
+        <div className="shrink-0 space-y-3">
           <div className="flex gap-2">
             <input
               ref={inputRef}
