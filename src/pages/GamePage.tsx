@@ -86,12 +86,10 @@ export function GamePage() {
     }
   }, [roomId]);
 
-  const handleNewAnswer = useCallback((answer: Answer) => {
-    setAnswers((prev) => {
-      if (prev.some((a) => a.id === answer.id)) return prev;
-      return [...prev, answer];
-    });
-  }, []);
+  const handleNewAnswer = useCallback((_answer: Answer) => {
+    if (!roomId) return;
+    fetchAnswers(roomId).then(setAnswers);
+  }, [roomId]);
 
   const handleDeleteAnswer = useCallback((answerId: string) => {
     setAnswers((prev) => prev.filter((a) => a.id !== answerId));
@@ -241,6 +239,9 @@ export function GamePage() {
 
       setWord('');
       focusInput();
+      if (room.id) {
+        fetchAnswers(room.id).then(setAnswers);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '제출에 실패했습니다.');
       focusInput();
