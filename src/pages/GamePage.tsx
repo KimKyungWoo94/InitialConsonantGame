@@ -298,7 +298,11 @@ export function GamePage() {
               value={word}
               onChange={(e) => setWord(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && isMyTurn && handleSubmit()}
-              placeholder={isMyTurn ? '단어 입력...' : '상대방 차례'}
+              placeholder={
+                isMyTurn
+                  ? `${room.chosung.length}글자 단어 입력...`
+                  : '상대방 차례'
+              }
               disabled={!isMyTurn || submitting}
               className="flex-1 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder:text-violet-400/50 outline-none focus:border-violet-300 disabled:opacity-50"
             />

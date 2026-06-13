@@ -91,9 +91,10 @@ export async function submitWord(
   usedWords: string[]
 ): Promise<SubmitWordResult> {
   const normalized = normalizeWord(word);
+  const validation = validateChosung(normalized, chosung);
 
-  if (!validateChosung(normalized, chosung)) {
-    return { success: false, reason: '초성이 일치하지 않아요!' };
+  if (!validation.ok) {
+    return { success: false, reason: validation.reason };
   }
 
   if (usedWords.some((w) => normalizeWord(w) === normalized)) {
