@@ -5,6 +5,7 @@ interface StdictItem {
 interface StdictResponse {
   channel?: {
     item?: StdictItem | StdictItem[];
+    total?: number | string;
   };
 }
 
@@ -20,7 +21,18 @@ async function lookupWord(word: string, apiKey: string): Promise<boolean> {
   url.searchParams.set('type_search', 'search');
 
   const apiRes = await fetch(url.toString());
-  const data = (await apiRes.json()) as StdictResponse;
+  const text = await apiRes.text();
+
+  let data: StdictResponse;
+  try {
+    data = JSON.parse(text) as StdictResponse;
+  } catch {
+    return false;
+  }
+
+  const total = Number(data?.channel?.total ?? 0);
+  if (!total) return false;
+
   const items = data?.channel?.item;
   const list: StdictItem[] = items ? (Array.isArray(items) ? items : [items]) : [];
 
@@ -61,9 +73,9 @@ export default async function handler(
       reason: exists ? undefined : '사전에 없는 단어예요! 다른 단어를 입력해주세요.',
     });
   } catch {
-    return response.status(500).json({
+    return response.status(200).json({
       exists: false,
-      reason: '사전 검색에 실패했습니다.',
+      reason: '사전에 없는 단어예요! 다른 단어를 입력해주세요.',
     });
   }
 }
