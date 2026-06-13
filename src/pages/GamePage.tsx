@@ -17,6 +17,7 @@ import { addRecentOpponent } from '../utils/recentOpponents';
 import { loadSession, saveSession } from '../utils/session';
 import { copyRoomCode, shareRoomInvite } from '../utils/share';
 import { notifyMyTurn } from '../utils/turnAlert';
+import { appendOptimisticAnswer, mergeAnswer } from '../utils/answerSync';
 import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
 
 export function GamePage() {
@@ -43,12 +44,42 @@ export function GamePage() {
   const wasMyTurnRef = useRef(false);
   const gameStartedAtRef = useRef<number | null>(null);
   const savedOpponentRef = useRef(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const refreshInflightRef = useRef<Promise<void> | null>(null);
   const [gameStats, setGameStats] = useState({ wordCount: 0, durationMs: 0 });
 
   const player: PlayerRole | null = session?.player ?? null;
   const isMyTurn = room?.status === 'playing' && room.turn === player;
   const opponentName =
     player === 'A' ? room?.player_b : player === 'B' ? room?.player_a : null;
+
+  const refreshAnswers = useCallback(
+    (immediate = false) => {
+      if (!roomId) return;
+
+      const run = () => {
+        if (refreshInflightRef.current) return refreshInflightRef.current;
+
+        const task = fetchAnswers(roomId)
+          .then(setAnswers)
+          .finally(() => {
+            if (refreshInflightRef.current === task) {
+              refreshInflightRef.current = null;
+            }
+          });
+        refreshInflightRef.current = task;
+        return task;
+      };
+
+      clearTimeout(refreshTimerRef.current);
+      if (immediate) {
+        run();
+        return;
+      }
+      refreshTimerRef.current = setTimeout(run, 120);
+    },
+    [roomId]
+  );
 
   const handleRoomUpdate = useCallback((updated: Room) => {
     const previous = roomRef.current;
@@ -61,7 +92,8 @@ export function GamePage() {
       updated.winner === null;
 
     if (rematched && roomId) {
-      fetchAnswers(roomId).then(setAnswers);
+      setAnswers([]);
+      refreshAnswers(true);
       setWord('');
       setError('');
       setRematchChosung('');
@@ -75,21 +107,11 @@ export function GamePage() {
       gameStartedAtRef.current = Date.now();
       savedOpponentRef.current = false;
     }
+  }, [roomId, refreshAnswers]);
 
-    if (
-      previous &&
-      previous.turn !== updated.turn &&
-      updated.status === 'playing' &&
-      roomId
-    ) {
-      fetchAnswers(roomId).then(setAnswers);
-    }
-  }, [roomId]);
-
-  const handleNewAnswer = useCallback((_answer: Answer) => {
-    if (!roomId) return;
-    fetchAnswers(roomId).then(setAnswers);
-  }, [roomId]);
+  const handleNewAnswer = useCallback((answer: Answer) => {
+    setAnswers((prev) => mergeAnswer(prev, answer));
+  }, []);
 
   const handleDeleteAnswer = useCallback((answerId: string) => {
     setAnswers((prev) => prev.filter((a) => a.id !== answerId));
@@ -101,6 +123,10 @@ export function GamePage() {
 
   useRoomSubscription(roomId, handleRoomUpdate);
   useAnswersSubscription(roomId, handleNewAnswer, handleDeleteAnswer, handleClearAnswers);
+
+  useEffect(() => {
+    return () => clearTimeout(refreshTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!roomId || room?.status !== 'waiting') return;
@@ -117,13 +143,13 @@ export function GamePage() {
       if (changed) {
         handleRoomUpdate(fresh);
         if (fresh.status === 'playing') {
-          fetchAnswers(roomId).then(setAnswers);
+          refreshAnswers(true);
         }
       }
-    }, 1500);
+    }, 3000);
 
     return () => clearInterval(poll);
-  }, [roomId, room?.status, room?.player_b, room?.turn, handleRoomUpdate]);
+  }, [roomId, room?.status, room?.player_b, room?.turn, handleRoomUpdate, refreshAnswers]);
 
   useEffect(() => {
     if (!roomId || room?.status !== 'finished') return;
@@ -132,9 +158,8 @@ export function GamePage() {
       const fresh = await fetchRoom(roomId);
       if (fresh && fresh.status === 'playing' && fresh.winner === null) {
         handleRoomUpdate(fresh);
-        fetchAnswers(roomId).then(setAnswers);
       }
-    }, 1500);
+    }, 3000);
 
     return () => clearInterval(poll);
   }, [roomId, room?.status, handleRoomUpdate]);
@@ -237,11 +262,28 @@ export function GamePage() {
         return;
       }
 
+      const nextTurn: PlayerRole = player === 'A' ? 'B' : 'A';
+      setRoom((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev, turn: nextTurn };
+        roomRef.current = updated;
+        return updated;
+      });
+
+      if (result.answer) {
+        setAnswers((prev) =>
+          appendOptimisticAnswer(
+            prev,
+            room.id,
+            player,
+            result.answer!.word,
+            result.answer!.definition
+          )
+        );
+      }
+
       setWord('');
       focusInput();
-      if (room.id) {
-        fetchAnswers(room.id).then(setAnswers);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '제출에 실패했습니다.');
       focusInput();
@@ -278,11 +320,8 @@ export function GamePage() {
 
     try {
       await rematch(room.id, chosung, firstTurn);
-      const [freshAnswers, freshRoom] = await Promise.all([
-        fetchAnswers(room.id),
-        fetchRoom(room.id),
-      ]);
-      setAnswers(freshAnswers);
+      setAnswers([]);
+      const freshRoom = await fetchRoom(room.id);
       if (freshRoom) {
         roomRef.current = freshRoom;
         setRoom(freshRoom);

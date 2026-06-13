@@ -37,4 +37,5 @@ export interface SubmitWordResult {
   reason?: string;
   gameOver?: boolean;
   loser?: PlayerRole;
+  answer?: Pick<Answer, 'word' | 'player' | 'definition'>;
 }

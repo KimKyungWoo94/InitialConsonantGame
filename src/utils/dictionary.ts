@@ -2,7 +2,12 @@ export type DictionaryValidation =
   | { ok: true; definition?: string }
   | { ok: false; reason: string };
 
+const validatedWordCache = new Map<string, DictionaryValidation>();
+
 export async function validateWordExists(word: string): Promise<DictionaryValidation> {
+  const cached = validatedWordCache.get(word);
+  if (cached) return cached;
+
   try {
     const res = await fetch(`/api/validate-word?word=${encodeURIComponent(word)}`);
 
@@ -30,7 +35,9 @@ export async function validateWordExists(word: string): Promise<DictionaryValida
       };
     }
 
-    return { ok: true, definition: data.definition };
+    const result: DictionaryValidation = { ok: true, definition: data.definition };
+    validatedWordCache.set(word, result);
+    return result;
   } catch {
     return { ok: false, reason: '사전 검증에 실패했습니다. 다시 시도해주세요.' };
   }

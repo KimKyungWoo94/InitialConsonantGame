@@ -189,7 +189,10 @@ export async function submitWord(
     };
   }
 
-  return result;
+  return {
+    ...result,
+    answer: { word: normalized, player, definition: dictionaryCheck.definition ?? null },
+  };
 }
 
 export async function surrender(roomId: string, player: PlayerRole) {

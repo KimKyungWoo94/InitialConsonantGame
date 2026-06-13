@@ -88,6 +88,7 @@ export default async function handler(
 ) {
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
 
   if (request.method === 'OPTIONS') {
     return response.status(200).json({});
