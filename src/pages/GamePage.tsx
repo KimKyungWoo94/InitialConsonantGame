@@ -23,7 +23,7 @@ import { notifyMyTurn } from '../utils/turnAlert';
 import { notifyNudgeReceived } from '../utils/nudgeAlert';
 import { appendOptimisticAnswer, mergeAnswer } from '../utils/answerSync';
 import { ChosungPicker, validateCustomChosung } from '../components/ChosungPicker';
-import { NudgeEffect } from '../components/NudgeEffect';
+import { NudgeEffect, type NudgeEffectState } from '../components/NudgeEffect';
 
 export function GamePage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -52,7 +52,7 @@ export function GamePage() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshInflightRef = useRef<Promise<void> | null>(null);
   const [gameStats, setGameStats] = useState({ wordCount: 0, durationMs: 0 });
-  const [nudgeEffect, setNudgeEffect] = useState<NudgePayload | null>(null);
+  const [nudgeEffect, setNudgeEffect] = useState<NudgeEffectState | null>(null);
 
   const player: PlayerRole | null = session?.player ?? null;
   const isMyTurn = room?.status === 'playing' && room.turn === player;
@@ -131,7 +131,11 @@ export function GamePage() {
 
   const handleNudgeReceived = useCallback((payload: NudgePayload) => {
     notifyNudgeReceived();
-    setNudgeEffect(payload);
+    setNudgeEffect({ ...payload, nudgeId: Date.now() });
+  }, []);
+
+  const clearNudgeEffect = useCallback(() => {
+    setNudgeEffect(null);
   }, []);
 
   const { sendNudge, canNudge, cooldownSeconds, sentMessage } = useNudge(
@@ -671,7 +675,7 @@ export function GamePage() {
 
   return (
     <div className="flex h-dvh flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <NudgeEffect payload={nudgeEffect} onDone={() => setNudgeEffect(null)} />
+      <NudgeEffect payload={nudgeEffect} onDone={clearNudgeEffect} />
       <div className="mx-auto flex h-full w-full max-w-md min-h-0 flex-col">
         <header className="mb-4 shrink-0 text-center">
           <p className="text-sm text-violet-300">

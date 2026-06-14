@@ -1,19 +1,34 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { NudgePayload } from '../types/nudge';
 
 const FLOATING_EMOJIS = ['🐣', '✨', '💨', '⏰', '🏃‍♀️', '💕'];
+const NUDGE_DISPLAY_MS = 2800;
+
+export interface NudgeEffectState extends NudgePayload {
+  nudgeId: number;
+}
 
 interface NudgeEffectProps {
-  payload: NudgePayload | null;
+  payload: NudgeEffectState | null;
   onDone: () => void;
 }
 
 export function NudgeEffect({ payload, onDone }: NudgeEffectProps) {
+  const onDoneRef = useRef(onDone);
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     if (!payload) return;
-    const timer = setTimeout(onDone, 2800);
+
+    const timer = setTimeout(() => {
+      onDoneRef.current();
+    }, NUDGE_DISPLAY_MS);
+
     return () => clearTimeout(timer);
-  }, [payload, onDone]);
+  }, [payload?.nudgeId]);
 
   if (!payload) return null;
 
