@@ -21,7 +21,7 @@ export interface WordLookupResult {
 }
 
 function normalizeDictWord(word: string): string {
-  return word.replace(/\([^)]*\)/g, '').replace(/[0-9]/g, '').trim();
+  return word.replace(/\([^)]*\)/g, '').replace(/-/g, '').replace(/[0-9]/g, '').trim();
 }
 
 function briefDefinition(raw: string): string {
